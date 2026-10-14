@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'">
+<title>HomiBank — حسابداری از پیامک بانکی</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1c2330;--mut:#6b7686;--bd:#dde1e8;--acc:#2b6cb0;--in:#2f9e6a;--out:#d1495b}
+@media (prefers-color-scheme:dark){:root{--bg:#12161d;--card:#1a2029;--fg:#e6e9ef;--mut:#94a0b2;--bd:#2c3542;--acc:#63a4e8;--in:#4cc790;--out:#ee7686}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.7 Tahoma,"Segoe UI",sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:8px 0 4px}h2{font-size:17px;margin:0 0 10px}
+.sub{color:var(--mut);font-size:13px;margin-bottom:14px}
+section{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+textarea,input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 8px}
+textarea{width:100%;min-height:130px;direction:rtl}
+button{font:inherit;cursor:pointer;background:var(--acc);color:#fff;border:0;border-radius:6px;padding:6px 14px}
+button.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+button.dng{background:var(--out)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.msg{margin-top:8px;font-size:13px;color:var(--mut);white-space:pre-line}
+.tot{display:flex;gap:12px;flex-wrap:wrap}
+.tot div{flex:1;min-width:140px;border:1px solid var(--bd);border-radius:8px;padding:8px 12px}
+.tot b{display:block;font-size:18px}
+.in{color:var(--in)}.out{color:var(--out)}
+svg{width:100%;height:auto;display:block;margin-top:10px}
+svg .bi{fill:var(--in)}svg .bo{fill:var(--out)}svg text{fill:var(--mut);font-size:11px;text-anchor:middle}
+svg .sel{fill:var(--acc);opacity:.12}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
+td.raw{white-space:normal;max-width:240px;color:var(--mut);font-size:12px}
+.chip{display:inline-block;background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:1px 10px;margin:2px}
+</style>
+</head>
+<body>
+<main>
+<h1>HomiBank</h1>
+<div class="sub">حسابداری خصوصی از روی پیامک‌های بانکی — کاملاً آفلاین؛ هیچ داده‌ای از این صفحه بیرون نمی‌رود.</div>
+
+<section>
+  <h2>۱. چسباندن پیامک‌ها</h2>
+  <textarea id="paste" placeholder="چند پیامک بانکی را اینجا paste کنید (هر پیامک در یک بلوک، ترجیحاً با یک خط خالی بین آن‌ها)"></textarea>
+  <div class="row">
+    <button id="btnImport">افزودن تراکنش‌ها</button>
+    <button id="btnSample" class="sec">درج پیامک‌های نمونه (ساختگی)</button>
+  </div>
+  <div id="importMsg" class="msg"></div>
+</section>
+
+<section>
+  <h2>۲. خلاصه‌ی ماهانه (شمسی)</h2>
+  <div class="row"><label>ماه: <select id="monthSel"></select></label></div>
+  <div class="tot" style="margin-top:8px">
+    <div>ورودی<b id="tIn" class="in">۰</b></div>
+    <div>خروجی<b id="tOut" class="out">۰</b></div>
+    <div>خالص<b id="tNet">۰</b></div>
+  </div>
+  <svg id="chart" viewBox="0 0 640 230" role="img" aria-label="نمودار ماهانه ورودی و خروجی"></svg>
+  <div id="catBreak" style="margin-top:8px"></div>
+</section>
+
+<section>
+  <h2>۳. تراکنش‌ها</h2>
+  <div class="tw"><table>
+    <thead><tr><th>تاریخ</th><th>ساعت</th><th>بانک</th><th>نوع</th><th>مبلغ (ریال)</th><th>مانده</th><th>دسته</th><th>متن</th><th></th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table></div>
+  <div id="emptyMsg" class="msg"></div>
+</section>
+
+<section>
+  <h2>۴. قانون‌های خودکار دسته‌بندی</h2>
+  <div class="sub">اگر متن پیامک شامل عبارت زیر بود، دسته‌ی مشخص‌شده اعمال می‌شود (دسته‌ی دستی هیچ‌وقت بازنویسی نمی‌شود).</div>
+  <div class="row">
+    <input id="ruleText" placeholder="اگر متن شامل…">
+    <input id="ruleCat" list="catList" placeholder="دسته…">
+    <datalist id="catList"></datalist>
+    <button id="btnRule">افزودن قانون</button>
+    <button id="btnApply" class="sec">اعمال روی دسته‌بندی‌نشده‌ها</button>
+  </div>
+  <div id="rules" style="margin-top:8px"></div>
+</section>
+
+<section>
+  <h2>۵. داده‌ها</h2>
+  <div class="row">
+    <button id="btnCsv" class="sec">خروجی CSV</button>
+    <button id="btnJson" class="sec">پشتیبان JSON</button>
+    <label class="sec" style="display:inline-block">بازیابی JSON: <input id="fileJson" type="file" accept=".json,application/json"></label>
+    <button id="btnClear" class="dng">پاک‌کردن همه</button>
+  </div>
+  <div id="dataMsg" class="msg"></div>
+</section>
+</main>
+
+<script id="core">
+/* هسته‌ی پارسر — بدون وابستگی به DOM؛ تست‌ها همین بلوک را در Node اجرا می‌کنند. */
+var HB = (function () {
+  'use strict';
+
+  /* ---------- تقویم شمسی (الگوریتم jalaali) ---------- */
+  var BREAKS = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178];
+  function div(a, b) { return ~~(a / b); }
+  function mod(a, b) { return a - ~~(a / b) * b; }
+  function jalCal(jy) {
+    var gy = jy + 621, leapJ = -14, jp = BREAKS[0], jm, jump = 0, i, n;
+    for (i = 1; i < BREAKS.length; i++) {
+      jm = BREAKS[i]; jump = jm - jp;
+      if (jy < jm) break;
+      leapJ += div(jump, 33) * 8 + div(mod(jump, 33), 4);
+      jp = jm;
+    }
+    n = jy - jp;
+    leapJ += div(n, 33) * 8 + div(mod(n, 33) + 3, 4);
+    if (mod(jump, 33) === 4 && jump - n === 4) leapJ += 1;
+    var leapG = div(gy, 4) - div((div(gy, 100) + 1) * 3, 4) - 150;
+    var march = 20 + leapJ - leapG;
+    if (jump - n < 6) n = n - jump + div(jump + 4, 33) * 33;
+    var leap = mod(mod(n + 1, 33) - 1, 4);
+    if (leap === -1) leap = 4;
+    return { leap: leap, gy: gy, march: march };
+  }
+  function g2d(gy, gm, gd) {
+    var d = div((gy + div(gm - 8, 6) + 100100) * 1461, 4) + div(153 * mod(gm + 9, 12) + 2, 5) + gd - 34840408;
+    return d - div(div(gy + 100100 + div(gm - 8, 6), 100) * 3, 4) + 752;
+  }
+  function d2g(jdn) {
+    var j = 4 * jdn + 139361631;
+    j += div(div(4 * jdn + 183187720, 146097) * 3, 4) * 4 - 3908;
+    var i = div(mod(j, 1461), 4) * 5 + 308;
+    var gd = div(mod(i, 153), 5) + 1, gm = mod(div(i, 153), 12) + 1;
+    return { gy: div(j, 1461) - 100100 + div(8 - gm, 6), gm: gm, gd: gd };
+  }
+  function j2d(jy, jm, jd) {
+    var r = jalCal(jy);
+    return g2d(r.gy, 3, r.march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1;
+  }
+  function d2j(jdn) {
+    var gy = d2g(jdn).gy, jy = gy - 621, r = jalCal(jy), k = jdn - g2d(gy, 3, r.march), jm, jd;
+    if (k >= 0) {
+      if (k <= 185) return { jy: jy, jm: 1 + div(k, 31), jd: mod(k, 31) + 1 };
+      k -= 186;
+    } else {
+      jy -= 1; k += 179;
+      if (r.leap === 1) k += 1;
+    }
+    jm = 7 + div(k, 30); jd = mod(k, 30) + 1;
+    return { jy: jy, jm: jm, jd: jd };
+  }
+  function toJalali(gy, gm, gd) { return d2j(g2d(gy, gm, gd)); }
+  function toGregorian(jy, jm, jd) { var g = d2g(j2d(jy, jm, jd)); return { gy: g.gy, gm: g.gm, gd: g.gd }; }
+  function isLeapJalali(jy) { return jalCal(jy).leap === 0; }
+  function jalaliMonthLength(jy, jm) { return jm <= 6 ? 31 : jm <= 11 ? 30 : (isLeapJalali(jy) ? 30 : 29); }
+  function validJalali(jy, jm, jd) { return jm >= 1 && jm <= 12 && jd >= 1 && jd <= jalaliMonthLength(jy, jm) && jy >= 1300 && jy <= 1500; }
+  function todayJalali(d) { d = d || new Date(); return toJalali(d.getFullYear(), d.getMonth() + 1, d.getDate()); }
+  var MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+
+  /* ---------- نرمال‌سازی متن ---------- */
+  function normalize(s) {
+    return String(s == null ? '' : s)
+      .replace(/\r\n?/g, '\n')
+      .replace(/[۰-۹]/g, function (c) { return c.charCodeAt(0) - 0x06F0; })
+      .replace(/[٠-٩]/g, function (c) { return c.charCodeAt(0) - 0x0660; })
+      .replace(/[٬،]/g, ',').replace(/٫/g, '.')
+      .replace(/ي/g, 'ی').replace(/ك/g, 'ک')
+      .replace(/\u200c/g, ' ').replace(/[\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+      .replace(/[−–—]/g, '-')
+      .replace(/[ \t\u00a0]+/g, ' ');
+  }
+
+  /* ---------- بانک‌ها ---------- */
+  var BANKS = [
+    { id: 'melli', name: 'ملی', re: /بانک ?ملی|^ ?ملی(?: |$)|melli/im, hints: {} },
+    { id: 'mellat', name: 'ملت', re: /بانک ?ملت|^ ?ملت(?: |$)|mellat/im, hints: { compactDate: true } },
+    { id: 'saderat', name: 'صادرات', re: /صادرات|saderat/i, hints: {} },
+    { id: 'tejarat', name: 'تجارت', re: /تجارت|tejarat/i, hints: {} },
+    { id: 'saman', name: 'سامان', re: /سامان|saman/i, hints: {} },
+    { id: 'pasargad', name: 'پاسارگاد', re: /پاسارگاد|pasargad/i, hints: {} },
+    { id: 'resalat', name: 'رسالت', re: /رسالت|resalat/i, hints: {} }
+  ];
+  function detectBank(t) {
+    for (var i = 0; i < BANKS.length; i++) if (BANKS[i].re.test(t)) return BANKS[i];
+    var m = /بانک ?([^\s\d:,*+\-]+)/.exec(t);
+    return { id: 'other', name: m ? m[1] : 'نامشخص', hints: {} };
+  }
+
+  /* ---------- پارسر ---------- */
+  var NUM = '\\d{1,3}(?:,\\d{3})+|\\d+';
+  var KW = 'مبلغ|برداشت|واریز|خرید|پرداخت|انتقال|کسر|دریافت|بدهکار|بستانکار|هزینه|سود';
+  var AMT_KW_RE = new RegExp('(' + KW + ')[^\\d\\n+\\-]{0,30}?([+\\-])?\\s*(' + NUM + ')\\s*([+\\-])?', 'g');
+  var BAL_RE = new RegExp('(?:باقی ?مانده|مانده|موجودی)(?: ?(?:حساب|قابل برداشت|نهایی|کل))?[^\\d\\n]{0,12}(' + NUM + ')', '');
+  var WITHDRAW_RE = /برداشت|خرید|پرداخت|کسر|بدهکار|هزینه|قبض/;
+  var DEPOSIT_RE = /واریز|دریافت|بستانکار|سود|افزایش/;
+
+  function toInt(s) { return parseInt(String(s).replace(/,/g, ''), 10); }
+  function blank(str, re) { return str.replace(re, function (m) { return new Array(m.length + 1).join(' '); }); }
+
+  function parseDateTime(work, bank, opts) {
+    var refYear = opts.refYear, out = { jy: null, jm: null, jd: null, time: null, guessed: false };
+    var tm = /(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?(?!\d)/.exec(work);
+    var dm = /(?<!\d)(\d{4}|\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})(?!\d)/.exec(work);
+    if (dm) {
+      var y = +dm[1], mo = +dm[2], d = +dm[3];
+      if (dm[1].length === 2) y += 1400;
+      if (y >= 1900) { var j = toJalali(y, mo, d); y = j.jy; mo = j.jm; d = j.jd; }
+      if (validJalali(y, mo, d)) { out.jy = y; out.jm = mo; out.jd = d; }
+      work = blank(work, new RegExp(dm[0].replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&')));
+    }
+    if (tm) {
+      out.time = ('0' + tm[1]).slice(-2) + ':' + tm[2];
+      work = blank(work, new RegExp(tm[0]));
+    } else if (bank.hints.compactDate && out.jy === null) {
+      var cm = /(?<!\d)(\d{2})(\d{2})[-_ ](\d{2}):?(\d{2})(?!\d)/.exec(work);
+      if (cm && validJalali(refYear, +cm[1], +cm[2]) && +cm[3] < 24 && +cm[4] < 60) {
+        out.jy = refYear; out.jm = +cm[1]; out.jd = +cm[2];
+        out.time = cm[3] + ':' + cm[4];
+        work = blank(work, new RegExp(cm[0].replace(/[-_ ]/g, '\\$&')));
+      }
+    }
+    if (out.jy === null && out.time) { // تاریخ بدون سال: mm/dd کنار ساعت
+      var sm = /(?<![\d\/])(\d{1,2})\/(\d{1,2})(?![\d\/])/.exec(work);
+      if (sm && validJalali(refYear, +sm[1], +sm[2])) {
+        out.jy = refYear; out.jm = +sm[1]; out.jd = +sm[2];
+        work = blank(work, new RegExp(sm[0].replace('/', '\\/')));
+      }
+    }
+    if (out.jy === null) {
+      var t = opts.today;
+      out.jy = t.jy; out.jm = t.jm; out.jd = t.jd; out.guessed = true;
+    }
+    return { dt: out, work: work };
+  }
+
+  function parseMessage(raw, opts) {
+    opts = opts || {};
+    var today = opts.today || todayJalali();
+    var o = { today: today, refYear: opts.refYear || today.jy };
+    var t = normalize(raw).trim();
+    if (!t) return { ok: false, reason: 'متن خالی' };
+    var bank = detectBank(t);
+
+    var work = t;
+    var r = parseDateTime(work, bank, o); work = r.work;
+    // شماره حساب/کارت/پیگیری و رشته‌های ماسک‌شده نباید مبلغ حساب شوند
+    work = blank(work, /(?:حساب|کارت|شبا|پیگیری|رهگیری|مرجع|شماره)[^\d\n]{0,6}[\d*xX\-]+/g);
+    work = blank(work, /[*xX#]+ ?\d+|\d+ ?[*xX#]+/g);
+    work = blank(work, /(?<![\d,])\d{11,}(?![\d,])/g);
+
+    var balance = null, bm = BAL_RE.exec(work);
+    if (bm) { balance = toInt(bm[1]); work = work.slice(0, bm.index) + new Array(bm[0].length + 1).join(' ') + work.slice(bm.index + bm[0].length); }
+
+    var amount = null, sign = '', m;
+    AMT_KW_RE.lastIndex = 0;
+    if ((m = AMT_KW_RE.exec(work))) { amount = toInt(m[3]); sign = m[2] || m[4] || ''; }
+    if (amount === null) {
+      var um = new RegExp('(' + NUM + ')\\s*([+\\-])?\\s*(?:ریال|تومان)').exec(work) ||
+               new RegExp('([+\\-])?\\s*(' + NUM + ')\\s*([+\\-])?').exec(work);
+      if (um) {
+        if (um.length === 3) { amount = toInt(um[1]); sign = um[2] || ''; }
+        else { amount = toInt(um[2]); sign = um[1] || um[3] || ''; }
+      }
+    }
+    if (amount === null || !(amount > 0)) return { ok: false, reason: 'مبلغ پیدا نشد' };
+
+    // نوع تراکنش: کلمه‌ی کلیدیِ زودتر در متن برنده است؛ بعد جهت «انتقال»؛ بعد علامت +/-
+    var wi = work.search(WITHDRAW_RE), di = work.search(DEPOSIT_RE), type = null;
+    if (wi >= 0 && (di < 0 || wi < di)) type = 'withdraw';
+    else if (di >= 0) type = 'deposit';
+    else if (/انتقال/.test(work)) {
+      if (/انتقال[^\n]{0,12}(?:^| )از(?: |$)|از ?(?:حساب|کارت)[^\n]{0,20}به ?(?:حساب|کارت) ?شما/.test(work)) type = 'deposit';
+      else if (/انتقال[^\n]{0,12}(?:^| )(?:به|برای)(?: |$)/.test(work)) type = 'withdraw';
+    }
+    if (!type && sign === '+') type = 'deposit';
+    if (!type && sign === '-') type = 'withdraw';
+    if (!type) return { ok: false, reason: 'نوع تراکنش (واریز/برداشت) مشخص نیست' };
+
+    if (/تومان/.test(t) && !/ریال/.test(t)) { amount *= 10; if (balance !== null) balance *= 10; }
+
+    var dt = r.dt;
+    var txn = {
+      bank: bank.name, type: type, amount: amount, balance: balance,
+      jy: dt.jy, jm: dt.jm, jd: dt.jd, time: dt.time, dateGuessed: dt.guessed,
+      raw: raw.trim(), category: '', manual: false
+    };
+    txn.rawFp = rawFingerprint(raw);
+    txn.fp = dt.guessed || (balance === null && !dt.time) ? txn.rawFp : fieldFingerprint(txn);
+    txn.id = hash(txn.fp + '#' + (opts.salt || ''));
+    return { ok: true, txn: txn };
+  }
+
+  /* ---------- جداکردن پیامک‌ها ---------- */
+  var HEADER_RE = /^(?:بانک |قرض الحسنه|ملی(?: |$)|ملت(?: |$)|صادرات|تجارت|سامان|پاسارگاد|رسالت|برداشت|واریز|خرید|انتقال|پرداخت)/;
+  function isComplete(s) { return /(?:مانده|موجودی)[^\d\n]{0,15}\d/.test(normalize(s)); }
+  function splitMessages(text) {
+    var out = [];
+    normalize(text).split(/\n[ \t]*\n/).forEach(function (block) {
+      var cur = [];
+      block.split('\n').map(function (l) { return l.trim(); }).filter(Boolean).forEach(function (l) {
+        if (cur.length && HEADER_RE.test(l) && isComplete(cur.join('\n'))) { out.push(cur.join('\n')); cur = []; }
+        cur.push(l);
+      });
+      if (cur.length) out.push(cur.join('\n'));
+    });
+    return out;
+  }
+
+  /* ---------- اثرانگشت برای جلوگیری از تکرار ---------- */
+  function hash(s) {
+    var h = 5381, i;
+    for (i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+  function rawFingerprint(raw) { return 'r|' + normalize(raw).replace(/\s+/g, ' ').trim(); }
+  function fieldFingerprint(t) {
+    return ['f', t.bank, t.type, t.amount, t.balance === null ? '' : t.balance, t.jy, t.jm, t.jd, t.time || ''].join('|');
+  }
+
+  /* ---------- قانون‌ها و ادغام ---------- */
+  function applyRules(txn, rules) {
+    if (txn.manual) return txn;
+    var text = normalize(txn.raw).toLowerCase();
+    for (var i = 0; i < rules.length; i++) {
+      var c = normalize(rules[i].contains).trim().toLowerCase();
+      if (c && text.indexOf(c) !== -1) { txn.category = rules[i].category; return txn; }
+    }
+    return txn;
+  }
+  function importText(text, existing, rules, opts) {
+    var seen = {}, res = { added: [], duplicates: 0, failed: [] };
+    existing.forEach(function (t) { seen[t.fp] = 1; seen[t.rawFp] = 1; });
+    splitMessages(text).forEach(function (msg) {
+      var p = parseMessage(msg, opts);
+      if (!p.ok) { res.failed.push({ raw: msg, reason: p.reason }); return; }
+      var t = p.txn;
+      if (seen[t.fp] || seen[t.rawFp]) { res.duplicates++; return; }
+      seen[t.fp] = 1; seen[t.rawFp] = 1;
+      res.added.push(applyRules(t, rules || []));
+    });
+    return res;
+  }
+
+  /* ---------- خلاصه و خروجی ---------- */
+  function pad2(n) { return ('0' + n).slice(-2); }
+  function monthKey(t) { return t.jy + '/' + pad2(t.jm); }
+  function monthlyTotals(txns) {
+    var map = {};
+    txns.forEach(function (t) {
+      var k = monthKey(t), e = map[k] || (map[k] = { key: k, jy: t.jy, jm: t.jm, 'in': 0, out: 0, count: 0 });
+      if (t.type === 'deposit') e['in'] += t.amount; else e.out += t.amount;
+      e.count++;
+    });
+    return Object.keys(map).sort().map(function (k) { return map[k]; });
+  }
+  function csvCell(v) {
+    var s = v == null ? '' : String(v).replace(/\r?\n/g, ' ');
+    if (/^[=+\-@\t]/.test(s) && isNaN(Number(s))) s = "'" + s;
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function toCSV(txns) {
+    var rows = [['date', 'time', 'bank', 'type', 'amount_rial', 'balance_rial', 'category', 'text']];
+    txns.slice().sort(cmp).forEach(function (t) {
+      rows.push([t.jy + '/' + pad2(t.jm) + '/' + pad2(t.jd), t.time || '', t.bank, t.type === 'deposit' ? 'deposit' : 'withdraw',
+        t.amount, t.balance === null ? '' : t.balance, t.category, t.raw]);
+    });
+    return rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
+  }
+  function cmp(a, b) {
+    return (a.jy - b.jy) || (a.jm - b.jm) || (a.jd - b.jd) || String(a.time || '').localeCompare(String(b.time || ''));
+  }
+  function sanitizeTxn(t) {
+    if (!t || typeof t !== 'object') return null;
+    var n = { amount: +t.amount, jy: +t.jy, jm: +t.jm, jd: +t.jd };
+    if (!(n.amount > 0) || !validJalali(n.jy, n.jm, n.jd)) return null;
+    if (t.type !== 'deposit' && t.type !== 'withdraw') return null;
+    n.type = t.type; n.bank = String(t.bank || 'نامشخص'); n.raw = String(t.raw || '');
+    n.balance = t.balance === null || t.balance === undefined || isNaN(+t.balance) ? null : +t.balance;
+    n.time = /^\d\d:\d\d$/.test(t.time || '') ? t.time : null;
+    n.category = String(t.category || ''); n.manual = !!t.manual; n.dateGuessed = !!t.dateGuessed;
+    n.rawFp = rawFingerprint(n.raw);
+    n.fp = typeof t.fp === 'string' && t.fp ? t.fp : (n.dateGuessed || (n.balance === null && !n.time) ? n.rawFp : fieldFingerprint(n));
+    n.id = typeof t.id === 'string' && t.id ? t.id : hash(n.fp);
+    return n;
+  }
+  function mergeBackup(existing, incoming) {
+    var seen = {}, added = 0, dup = 0, bad = 0;
+    existing.forEach(function (t) { seen[t.fp] = 1; seen[t.rawFp] = 1; });
+    (Array.isArray(incoming) ? incoming : []).forEach(function (x) {
+      var t = sanitizeTxn(x);
+      if (!t) { bad++; return; }
+      if (seen[t.fp] || seen[t.rawFp]) { dup++; return; }
+      seen[t.fp] = 1; seen[t.rawFp] = 1; existing.push(t); added++;
+    });
+    return { added: added, duplicates: dup, invalid: bad };
+  }
+
+  return {
+    normalize: normalize, splitMessages: splitMessages, parseMessage: parseMessage, importText: importText,
+    applyRules: applyRules, monthlyTotals: monthlyTotals, toCSV: toCSV, mergeBackup: mergeBackup, sanitizeTxn: sanitizeTxn,
+    toJalali: toJalali, toGregorian: toGregorian, todayJalali: todayJalali, jalaliMonthLength: jalaliMonthLength,
+    isLeapJalali: isLeapJalali, MONTHS: MONTHS, cmp: cmp, monthKey: monthKey, pad2: pad2
+  };
+})();
+</script>
+
+<script id="app">
+(function () {
+  'use strict';
+  var KEY = 'homibank.v1';
+  var DEFAULT_CATS = ['خوراک', 'حمل‌ونقل', 'قبوض', 'خرید', 'حقوق و درآمد', 'انتقال', 'سایر'];
+  var state = { txns: [], rules: [], categories: DEFAULT_CATS.slice() };
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { try { return Number(n).toLocaleString('fa-IR'); } catch (e) { return String(n); } };
+
+  /* پیامک‌های نمونه — کاملاً ساختگی (حساب و مبلغ جعلی) */
+  var SAMPLE = [
+    'بانک ملی\nبرداشت:350,000-\nمانده:4,650,000\n1405/07/03-09:15',
+    'بانک ملت\nواریز: 12,000,000+\nمانده: 16,650,000\n0705-1030',
+    'بانک تجارت\nخرید از فروشگاه نمونه\nمبلغ: ۱۸۰٬۰۰۰ ریال\nمانده: ۱۶٬۴۷۰٬۰۰۰\n۱۴۰۵/۰۷/۰۶ ۱۴:۲۰',
+    'پاسارگاد\nانتقال به حساب ****0000\nمبلغ 2,000,000 ریال\nمانده 14,470,000\n1405/07/10 18:45',
+    'بانک سامان\nپرداخت قبض برق\n450,000 ریال\nمانده: 14,020,000\n1405/07/12 11:05',
+    'بانک صادرات\nبرداشت 90,000 ریال\nمانده 13,930,000\n05/07/14 20:10',
+    'بانک رسالت\nواریز 5,000,000 ریال\nمانده: 18,930,000\n1405/07/20 08:30'
+  ].join('\n\n');
+
+  function load() {
+    try {
+      var s = localStorage.getItem(KEY);
+      if (!s) return;
+      var d = JSON.parse(s);
+      state.txns = (d.txns || []).map(HB.sanitizeTxn).filter(Boolean);
+      state.rules = Array.isArray(d.rules) ? d.rules.filter(function (r) { return r && r.contains && r.category; }) : [];
+      if (Array.isArray(d.categories) && d.categories.length) state.categories = d.categories.map(String);
+    } catch (e) { /* حافظه در دسترس نیست؛ برنامه بدون ذخیره کار می‌کند */ }
+  }
+  var warned = false;
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); }
+    catch (e) { if (!warned) { warned = true; msg('dataMsg', 'ذخیره در مرورگر ممکن نیست؛ از «پشتیبان JSON» استفاده کنید.'); } }
+  }
+  function msg(id, text) { $(id).textContent = text; }
+  function el(tag, props, kids) {
+    var e = document.createElement(tag), k;
+    for (k in (props || {})) e[k] = props[k];
+    (kids || []).forEach(function (c) { e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function ensureCat(c) { if (c && state.categories.indexOf(c) === -1) state.categories.push(c); }
+  function download(name, mime, text, bom) {
+    var url = URL.createObjectURL(new Blob([bom ? '\ufeff' : '', text], { type: mime }));
+    var a = el('a', { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  var dateStr = function (t) { return t.jy + '/' + HB.pad2(t.jm) + '/' + HB.pad2(t.jd); };
+
+  function currentMonth() { return $('monthSel').value; }
+
+  function renderMonths() {
+    var sel = $('monthSel'), prev = sel.value, totals = HB.monthlyTotals(state.txns);
+    sel.textContent = '';
+    sel.appendChild(el('option', { value: '' }, ['همه‌ی ماه‌ها']));
+    totals.slice().reverse().forEach(function (m) {
+      sel.appendChild(el('option', { value: m.key }, [HB.MONTHS[m.jm - 1] + ' ' + fmt(m.jy).replace(/٬/g, '')]));
+    });
+    var keys = totals.map(function (m) { return m.key; });
+    sel.value = keys.indexOf(prev) !== -1 ? prev : (keys.length ? keys[keys.length - 1] : '');
+  }
+
+  function renderSummary() {
+    var totals = HB.monthlyTotals(state.txns), key = currentMonth();
+    var cur = totals.filter(function (m) { return m.key === key; })[0];
+    var inn = key ? (cur ? cur['in'] : 0) : totals.reduce(function (a, m) { return a + m['in']; }, 0);
+    var out = key ? (cur ? cur.out : 0) : totals.reduce(function (a, m) { return a + m.out; }, 0);
+    $('tIn').textContent = fmt(inn); $('tOut').textContent = fmt(out);
+    var net = $('tNet'); net.textContent = fmt(inn - out); net.className = inn - out >= 0 ? 'in' : 'out';
+    drawChart(totals.slice(-12), key);
+
+    var cats = {};
+    state.txns.filter(function (t) { return t.type === 'withdraw' && (!key || HB.monthKey(t) === key); })
+      .forEach(function (t) { var c = t.category || 'بدون دسته'; cats[c] = (cats[c] || 0) + t.amount; });
+    var box = $('catBreak'); box.textContent = '';
+    var names = Object.keys(cats).sort(function (a, b) { return cats[b] - cats[a]; });
+    if (names.length) box.appendChild(el('div', { className: 'sub' }, ['خروجی بر اساس دسته:']));
+    names.forEach(function (c) { box.appendChild(el('span', { className: 'chip' }, [c + ': ' + fmt(cats[c])])); });
+  }
+
+  function drawChart(months, selKey) {
+    var NS = 'http://www.w3.org/2000/svg', svg = $('chart');
+    svg.textContent = '';
+    function s(tag, attrs, text) {
+      var e = document.createElementNS(NS, tag), k;
+      for (k in attrs) e.setAttribute(k, attrs[k]);
+      if (text != null) e.textContent = text;
+      svg.appendChild(e); return e;
+    }
+    if (!months.length) { s('text', { x: 320, y: 115 }, 'هنوز تراکنشی نیست'); return; }
+    var W = 640, H = 230, top = 12, bottom = 34, left = 8, right = 8;
+    var max = Math.max.apply(null, months.map(function (m) { return Math.max(m['in'], m.out); })) || 1;
+    var step = (W - left - right) / Math.max(months.length, 6), bw = Math.min(26, step * 0.34), ch = H - top - bottom;
+    months.forEach(function (m, i) {
+      var cx = W - right - step * (i + 0.5); // قدیمی‌ترین در سمت راست (RTL)
+      if (m.key === selKey) s('rect', { 'class': 'sel', x: cx - step / 2, y: 0, width: step, height: H - bottom + 4 });
+      var hi = m['in'] / max * ch, ho = m.out / max * ch;
+      var a = s('rect', { 'class': 'bi', x: cx - bw - 1, y: top + ch - hi, width: bw, height: Math.max(hi, m['in'] ? 1 : 0), rx: 2 });
+      a.appendChild(document.createElementNS(NS, 'title')).textContent = 'ورودی ' + fmt(m['in']);
+      var b = s('rect', { 'class': 'bo', x: cx + 1, y: top + ch - ho, width: bw, height: Math.max(ho, m.out ? 1 : 0), rx: 2 });
+      b.appendChild(document.createElementNS(NS, 'title')).textContent = 'خروجی ' + fmt(m.out);
+      s('text', { x: cx, y: H - 16 }, HB.MONTHS[m.jm - 1]);
+      s('text', { x: cx, y: H - 3 }, fmt(m.jy).replace(/٬/g, ''));
+    });
+    s('line', { x1: left, x2: W - right, y1: top + ch, y2: top + ch, stroke: 'currentColor', 'stroke-opacity': '.25' });
+  }
+
+  function renderRules() {
+    var box = $('rules'); box.textContent = '';
+    state.rules.forEach(function (r, i) {
+      var x = el('button', { className: 'sec', title: 'حذف' }, ['×']);
+      x.style.padding = '0 8px';
+      x.onclick = function () { state.rules.splice(i, 1); save(); renderAll(); };
+      box.appendChild(el('span', { className: 'chip' }, ['«' + r.contains + '» ← ' + r.category + ' ', x]));
+    });
+    var dl = $('catList'); dl.textContent = '';
+    state.categories.forEach(function (c) { dl.appendChild(el('option', { value: c })); });
+  }
+
+  function renderTable() {
+    var key = currentMonth(), body = $('tbody'); body.textContent = '';
+    var list = state.txns.filter(function (t) { return !key || HB.monthKey(t) === key; }).sort(HB.cmp).reverse();
+    list.forEach(function (t) {
+      var sel = el('select'), c;
+      sel.appendChild(el('option', { value: '' }, ['—']));
+      state.categories.forEach(function (c) { sel.appendChild(el('option', { value: c }, [c])); });
+      sel.value = t.category || '';
+      sel.onchange = function () { t.category = sel.value; t.manual = !!sel.value; save(); renderSummary(); };
+      var del = el('button', { className: 'sec', title: 'حذف' }, ['×']);
+      del.onclick = function () { state.txns = state.txns.filter(function (x) { return x !== t; }); save(); renderAll(); };
+      body.appendChild(el('tr', {}, [
+        el('td', {}, [dateStr(t) + (t.dateGuessed ? ' ؟' : '')]), el('td', {}, [t.time || '—']), el('td', {}, [t.bank]),
+        el('td', { className: t.type === 'deposit' ? 'in' : 'out' }, [t.type === 'deposit' ? 'واریز' : 'برداشت']),
+        el('td', {}, [fmt(t.amount)]), el('td', {}, [t.balance === null ? '—' : fmt(t.balance)]),
+        el('td', {}, [sel]), el('td', { className: 'raw' }, [t.raw.replace(/\s*\n\s*/g, ' | ')]), el('td', {}, [del])
+      ]));
+    });
+    msg('emptyMsg', list.length ? (state.txns.some(function (t) { return t.dateGuessed; }) ? '«؟» یعنی تاریخ در پیامک نبود و تاریخ روز ثبت استفاده شد.' : '') : 'تراکنشی برای نمایش نیست.');
+  }
+
+  function renderAll() { renderMonths(); renderRules(); renderSummary(); renderTable(); }
+
+  $('btnImport').onclick = function () {
+    var text = $('paste').value;
+    if (!text.trim()) { msg('importMsg', 'ابتدا متن پیامک‌ها را paste کنید.'); return; }
+    var r = HB.importText(text, state.txns, state.rules);
+    r.added.forEach(function (t) { state.txns.push(t); });
+    save();
+    var lines = [fmt(r.added.length) + ' تراکنش جدید ثبت شد، ' + fmt(r.duplicates) + ' تکراری نادیده گرفته شد، ' + fmt(r.failed.length) + ' پیامک شناسایی نشد.'];
+    r.failed.slice(0, 5).forEach(function (f) { lines.push('• ' + f.reason + ': ' + f.raw.replace(/\s*\n\s*/g, ' | ').slice(0, 80)); });
+    msg('importMsg', lines.join('\n'));
+    if (r.added.length) $('paste').value = '';
+    renderAll();
+  };
+  $('btnSample').onclick = function () { $('paste').value = SAMPLE; };
+  $('monthSel').onchange = function () { renderSummary(); renderTable(); };
+  $('btnRule').onclick = function () {
+    var c = $('ruleText').value.trim(), cat = $('ruleCat').value.trim();
+    if (!c || !cat) { return; }
+    state.rules.push({ contains: c, category: cat }); ensureCat(cat);
+    $('ruleText').value = ''; $('ruleCat').value = '';
+    save(); renderAll();
+  };
+  $('btnApply').onclick = function () {
+    var n = 0;
+    state.txns.forEach(function (t) { if (!t.manual && !t.category) { HB.applyRules(t, state.rules); if (t.category) n++; } });
+    save(); renderAll(); msg('dataMsg', fmt(n) + ' تراکنش دسته‌بندی شد.');
+  };
+  $('btnCsv').onclick = function () { download('homibank.csv', 'text/csv;charset=utf-8', HB.toCSV(state.txns), true); };
+  $('btnJson').onclick = function () { download('homibank-backup.json', 'application/json', JSON.stringify(state, null, 1), false); };
+  $('fileJson').onchange = function (ev) {
+    var f = ev.target.files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      try {
+        var d = JSON.parse(rd.result);
+        var r = HB.mergeBackup(state.txns, d.txns);
+        (d.rules || []).forEach(function (x) {
+          if (x && x.contains && x.category && !state.rules.some(function (y) { return y.contains === x.contains && y.category === x.category; })) {
+            state.rules.push({ contains: String(x.contains), category: String(x.category) }); ensureCat(String(x.category));
+          }
+        });
+        (d.categories || []).forEach(function (c) { ensureCat(String(c)); });
+        save(); renderAll();
+        msg('dataMsg', fmt(r.added) + ' تراکنش بازیابی شد، ' + fmt(r.duplicates) + ' تکراری، ' + fmt(r.invalid) + ' نامعتبر.');
+      } catch (e) { msg('dataMsg', 'فایل پشتیبان معتبر نیست.'); }
+      ev.target.value = '';
+    };
+    rd.readAsText(f);
+  };
+  $('btnClear').onclick = function () {
+    if (!confirm('همه‌ی تراکنش‌ها و قانون‌ها پاک شود؟ (بهتر است قبلاً پشتیبان بگیرید)')) return;
+    state = { txns: [], rules: [], categories: DEFAULT_CATS.slice() };
+    save(); renderAll(); msg('dataMsg', 'همه‌چیز پاک شد.');
+  };
+
+  load();
+  renderAll();
+})();
+</script>
+</body>
+</html>
